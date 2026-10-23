@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>42K ペース配分ラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: race-day clipboard — controls rail on the left, live result board and three charts on the right; stacks on phones */
+:root{
+  --bg:#eef1ef; --panel:#fbfcfb; --ink:#17252b; --muted:#5b6b70; --line:#d3dbd8;
+  --plan:#7d8f95; --act:#c8462f; --gly:#1f8a7c; --fat:#c98a12; --good:#2f7d4a; --bad:#b23a26;
+  --chip:#e2e8e5; --rec:#6a5acd;
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111a1d; --panel:#172327; --ink:#e4ecea; --muted:#93a5a8; --line:#2b3b40;
+  --plan:#8ea1a6; --act:#ee6a4f; --gly:#3fbfad; --fat:#e3a93a; --good:#5cbf7d; --bad:#f07a62; --chip:#203035; --rec:#a597f2; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111a1d; --panel:#172327; --ink:#e4ecea; --muted:#93a5a8; --line:#2b3b40;
+  --plan:#8ea1a6; --act:#ee6a4f; --gly:#3fbfad; --fat:#e3a93a; --good:#5cbf7d; --bad:#f07a62; --chip:#203035; --rec:#a597f2; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 24px;border-bottom:2px solid var(--ink);padding-bottom:12px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(34px,6vw,52px);line-height:.95;margin:0;letter-spacing:.01em;text-wrap:balance}
+h1 span{color:var(--act)}
+header p{margin:0;color:var(--muted);max-width:52ch}
+.grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.rail{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:18px}
+fieldset{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
+legend{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;padding:0}
+.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px}
+.row label{font-size:13px}
+.row small{display:block;color:var(--muted);font-size:11px;line-height:1.35}
+input[type=text],input[type=number]{width:96px;font-family:var(--f-mono);font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);text-align:right}
+input:focus-visible,button:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+.slider{display:flex;flex-direction:column;gap:4px}
+.slider .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px}
+.slider output{font-family:var(--f-mono);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--act)}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{font-family:var(--f-body);font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer}
+.presets button:hover{border-color:var(--act)}
+.presets button[aria-pressed="true"]{background:var(--act);color:#fff;border-color:var(--act)}
+.main{display:flex;flex-direction:column;gap:20px;min-width:0}
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--ink);color:var(--bg);border-radius:6px;overflow:hidden}
+@media (max-width:620px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.cell{padding:14px 16px;border-right:1px solid color-mix(in srgb,var(--bg) 18%,transparent);border-bottom:1px solid color-mix(in srgb,var(--bg) 18%,transparent);min-width:0}
+.cell .k{font-size:11px;letter-spacing:.08em;opacity:.7}
+.cell .v{font-family:var(--f-display);font-weight:600;font-size:34px;line-height:1.05;font-variant-numeric:tabular-nums}
+.cell .s{font-size:12px;opacity:.75}
+.cell.big .v{font-size:44px}
+.v.good{color:var(--gly)} .v.bad{color:var(--act)}
+.verdict{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--act);border-radius:4px;padding:12px 14px;font-size:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
+.card h2{font-size:15px;margin:0 0 2px;font-weight:700}
+.card .sub{color:var(--muted);font-size:12px;margin:0 0 8px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-bottom:4px}
+.legend i{display:inline-block;width:16px;height:3px;vertical-align:middle;margin-right:6px;border-radius:2px}
+.chart{width:100%;overflow-x:auto}
+.chart svg{display:block;width:100%;height:auto;min-width:520px}
+.chart text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media (max-width:1000px){.two{grid-template-columns:minmax(0,1fr)}}
+details{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 16px}
+summary{cursor:pointer;font-weight:700}
+details p,details li{max-width:72ch;color:var(--ink)}
+details code{font-family:var(--f-mono);font-size:12px;background:var(--chip);padding:1px 5px;border-radius:3px}
+.err{color:var(--bad);font-size:11px}
+@media (prefers-reduced-motion:no-preference){.cell .v{transition:color .2s}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>42K <span>ペース配分</span>ラボ</h1>
+    <p>同じ目標タイムでも、配分を変えると糖の残量と脚の疲労がどう変わり、どこで失速するかを試せるモデルです。</p>
+  </header>
+
+  <div class="grid">
+    <form class="rail" id="form" autocomplete="off">
+      <fieldset>
+        <legend>ランナー</legend>
+        <div class="row"><label for="thr">閾値ペース<small>約1時間維持できるペース（/km）</small></label><input type="text" id="thr" value="4:35" inputmode="numeric"></div>
+        <div class="row"><label for="wt">体重（kg）</label><input type="number" id="wt" value="65" min="35" max="120" step="1"></div>
+        <div class="row"><label for="gly">糖の貯蔵（kcal）<small>筋＋肝グリコーゲン。カーボローディングで増える</small></label><input type="number" id="gly" value="1600" min="800" max="3000" step="50"></div>
+      </fieldset>
+      <fieldset>
+        <legend>レース条件</legend>
+        <div class="row"><label for="tgt">目標タイム</label><input type="text" id="tgt" value="3:28:00" inputmode="numeric"></div>
+        <div class="row"><label for="carb">補給（g/時）<small>ジェル1本 ≈ 20〜25g</small></label><input type="number" id="carb" value="40" min="0" max="100" step="5"></div>
+        <div class="row"><label for="temp">気温（℃）</label><input type="number" id="temp" value="15" min="-5" max="35" step="1"></div>
+        <div class="err" id="err" hidden></div>
+      </fieldset>
+      <fieldset>
+        <legend>回復</legend>
+        <div class="slider">
+          <div class="top"><label for="half">一時的な疲労の回復の速さ</label><output id="halfOut"></output></div>
+          <input type="range" id="half" min="0" max="60" step="5" value="15">
+          <small style="color:var(--muted);font-size:11px">ペースを落とした区間で、たまった疲労が半分に戻るまでの時間。0で回復なし</small>
+        </div>
+        <div class="slider">
+          <div class="top"><label for="ic">回復に回れる強度の上限</label><output id="icOut"></output></div>
+          <input type="range" id="ic" min="85" max="100" step="1" value="95">
+          <small style="color:var(--muted);font-size:11px">閾値ペースの速度に対する割合。これより速いと疲労がたまり、遅いと回復します</small>
+        </div>
+        <div class="slider">
+          <div class="top"><label for="dmg">筋損傷の回復</label><output id="dmgOut"></output></div>
+          <input type="range" id="dmg" min="0" max="30" step="5" value="0">
+          <small style="color:var(--muted);font-size:11px">着地衝撃による損傷がレース中に戻る割合（1時間あたり）。通常はほぼ0</small>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>配分</legend>
+        <div class="presets" id="presets">
+          <button type="button" data-s="0" data-u="0">イーブン</button>
+          <button type="button" data-s="-3" data-u="0">ネガティブ</button>
+          <button type="button" data-s="6" data-u="0">ポジティブ</button>
+          <button type="button" data-s="0" data-u="12">序盤突っ込み</button>
+        </div>
+        <div class="slider">
+          <div class="top"><label for="split">後半の遅れ（前後半差）</label><output id="splitOut"></output></div>
+          <input type="range" id="split" min="-10" max="12" step="1" value="6">
+          <small style="color:var(--muted);font-size:11px">プラス＝後半を遅く計画（ポジティブ）、マイナス＝後半を速く計画</small>
+        </div>
+        <div class="slider">
+          <div class="top"><label for="surge">最初の10kmを速く入る</label><output id="surgeOut"></output></div>
+          <input type="range" id="surge" min="0" max="25" step="1" value="0">
+          <small style="color:var(--muted);font-size:11px">速めた分は残りの区間に均等に割り振り、目標タイムは同じに保ちます</small>
+        </div>
+      </fieldset>
+    </form>
+
+    <div class="main">
+      <div class="board" id="board">
+        <div class="cell big"><div class="k">予測ゴール</div><div class="v" id="rFinish">–</div><div class="s" id="rDiff">–</div></div>
+        <div class="cell"><div class="k">失速開始</div><div class="v" id="rWall">–</div><div class="s">計画より3%以上遅れた地点</div></div>
+        <div class="cell"><div class="k">実際の前後半</div><div class="v" id="rHalf">–</div><div class="s" id="rHalfS">–</div></div>
+        <div class="cell"><div class="k">ゴール時の糖残量</div><div class="v" id="rGly">–</div><div class="s" id="rFat">–</div></div>
+      </div>
+      <div class="verdict" id="verdict">–</div>
+
+      <div class="card">
+        <h2>1kmごとのラップ</h2>
+        <p class="sub">点線が計画、実線がモデルの予測。上ほど速いペースです。</p>
+        <div class="legend"><span><i style="background:var(--plan)"></i>計画ペース</span><span><i style="background:var(--act)"></i>予測ペース</span></div>
+        <div class="chart" id="cPace"></div>
+      </div>
+
+      <div class="two">
+        <div class="card">
+          <h2>糖の残量と脚の疲労</h2>
+          <p class="sub">左軸は糖の残量。右軸は疲労による速度上限の低下。糖が12%を切ると出せる速度が下がります。</p>
+          <div class="legend"><span><i style="background:var(--gly)"></i>糖の残量（%）</span><span><i style="background:var(--fat)"></i>筋損傷（回復しにくい）</span><span><i style="background:var(--rec)"></i>一時的な疲労（回復する）</span></div>
+          <div class="chart" id="cFuel"></div>
+        </div>
+        <div class="card">
+          <h2>前後半差ごとのゴールタイム</h2>
+          <p class="sub">いまの条件で前後半差だけを −10%〜+12% に振った結果。丸印が現在の設定です。</p>
+          <div class="legend"><span><i style="background:var(--act)"></i>予測ゴール</span><span><i style="background:var(--plan)"></i>回復なしの場合</span><span><i style="background:var(--gly)"></i>最速の配分</span></div>
+          <div class="chart" id="cSweep"></div>
+        </div>
+      </div>
+
+      <div class="card" id="limitCard">
+        <h2>このモデルでの限界</h2>
+        <p class="sub" id="limitText">–</p>
+      </div>
+
+      <details>
+        <summary>モデルの仕組み</summary>
+        <p>42.195kmを100m刻みで計算します。各区間で次の3つを更新します。</p>
+        <ul>
+          <li><b>エネルギー消費</b>：1kmあたり <code>体重 × 1.0 kcal</code>。速度にはほぼ依存しませんが、疲労と暑さで少し増えます。</li>
+          <li><b>糖の割合</b>：強度 <code>I = 速度 ÷ 閾値速度</code> に対して <code>0.25 + 0.75 × ((I−0.5)/0.5)^4</code>。強度が上がると急に糖を使うようになる、下に凸の関数です。補給は時間あたりで糖に加算します。</li>
+          <li><b>筋損傷（回復しにくい疲労）</b>：<code>I</code> が0.72を超えた分の4乗で蓄積します。「筋損傷の回復」を上げると、1時間あたりその割合だけ戻ります。</li>
+          <li><b>一時的な疲労（回復する疲労）</b>：乳酸・水素イオンの蓄積やクレアチンリン酸の減少などに相当します。強度が「回復に回れる強度の上限」を超えると <code>0.06 × (I − 上限)</code>/分でたまり、下回ると指数関数的に減ります。回復の速さは半減期で指定し、上限から離れるほど（8%下で最大）速く戻ります。自転車競技で使われるW′バランスモデルと同じ考え方です。</li>
+        </ul>
+        <p>各区間の実際の速度は「計画の速度」と「その時点で出せる上限」の小さい方です。上限は <code>閾値速度 × (1−筋損傷) × (1−一時的な疲労) × 糖係数</code> で、糖係数は残量12%以下で下がり始め、0%で0.68になります。</p>
+        <p>一時的な疲労がたまっている間は糖の使用割合と消費も増えます。そのため、後で回復しても、その間に余分に使った糖は戻りません。序盤の突っ込みが回復で完全には取り返せないのはこのためです。</p>
+        <p>係数は一般的な生理学の傾向に合わせた仮の値で、個人差は大きく、心拍ドリフトや脱水、上り下りは扱っていません。数値そのものより、配分による差の向きと大きさを見るためのものです。</p>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const L=42.195, DX=0.1, N=Math.round(L/DX);
+const $=id=>document.getElementById(id);
+
+function parseClock(s){
+  const parts=String(s).trim().split(':').map(Number);
+  if(parts.some(x=>!isFinite(x)||x<0)) return NaN;
+  return parts.reduce((a,b)=>a*60+b,0);
+}
+function fmtTime(sec){
+  sec=Math.round(sec); const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function fmtPace(sec){ sec=Math.round(sec); return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`; }
+function fmtDelta(sec){ const sgn=sec<0?'−':'+'; sec=Math.abs(Math.round(sec)); const m=Math.floor(sec/60), s=sec%60; return `${sgn}${m}:${String(s).padStart(2,'0')}`; }
+
+function simulate(p){
+  const avg=p.target/L, cs=1/p.threshold, G0=p.glycogen;
+  const heat=Math.max(0,p.temp-12)*0.015;
+  const c=p.surge*10/L, Ic=p.ic, tau=p.half>0?p.half*60/Math.LN2:0;
+  let G=G0, F=0, M=0, Macc=0, Mrec=0, Mmax=0, t=0, wallKm=null, depleteKm=null;
+  const steps=[];
+  for(let i=0;i<N;i++){
+    const d=(i+0.5)*DX;
+    const plan=avg*(1+p.split*(d/L-0.5)) + c - (d<10?p.surge:0);
+    const gf=0.68+0.32*Math.min(1,G/(0.12*G0));
+    const cap=cs*(1-F)*(1-M)*gf;
+    const v=Math.min(1/plan,cap);
+    if(wallKm===null && v<(1/plan)*0.97) wallKm=d;
+    const I=v/cs, dt=DX/v; t+=dt;
+    const cost=p.weight*DX*(1+0.8*F+0.5*M)*(1+heat*0.4);
+    let f=0.25+0.75*Math.pow(Math.max(0,(I-0.5)/0.5),4);
+    f=Math.min(1,f*(1+heat)*(1+M));
+    G+= -f*cost + p.carbs*4*dt/3600;
+    G=Math.max(0,Math.min(G0,G));
+    if(depleteKm===null && G<=0.001) depleteKm=d;
+    F+=0.9*Math.pow(Math.max(0,I-0.72),4)*(1+heat)*DX;
+    F-=F*p.dmg*dt/3600;
+    if(I>Ic){const a=0.06*(I-Ic)*dt/60*(1+heat);M+=a;Macc+=a;}
+    else if(tau>0){const r=M*(1-Math.exp(-dt/tau))*Math.min(1,(Ic-I)/0.08);M-=r;Mrec+=r;}
+    Mmax=Math.max(Mmax,M);
+    steps.push({d,plan,dt,G:G/G0,F,M});
+  }
+  // 1km laps
+  const laps=[]; let half1=0;
+  for(let k=0;k<Math.ceil(L);k++){
+    const seg=steps.filter(s=>s.d>=k&&s.d<k+1);
+    if(!seg.length) continue;
+    const len=seg.length*DX, tt=seg.reduce((a,s)=>a+s.dt,0), pt=seg.reduce((a,s)=>a+s.plan*DX,0);
+    laps.push({km:k+1,mid:k+len/2,act:tt/len,plan:pt/len});
+  }
+  for(const s of steps){ if(s.d<L/2) half1+=s.dt; }
+  return {t,wallKm,depleteKm,steps,laps,half1,half2:t-half1,endG:G/G0,endF:F,endM:M,Macc,Mrec,Mmax};
+}
+
+function read(){
+  const thr=parseClock($('thr').value), tgt=parseClock($('tgt').value);
+  const err=[];
+  if(!(thr>=150&&thr<=600)) err.push('閾値ペースは「4:35」のように分:秒で入力してください（2:30〜10:00）。');
+  if(!(tgt>=7200&&tgt<=8*3600)) err.push('目標タイムは「3:28:00」のように時:分:秒で入力してください（2〜8時間）。');
+  const num=(id,lo,hi,def)=>{const v=parseFloat($(id).value);return isFinite(v)?Math.min(hi,Math.max(lo,v)):def;};
+  return {err,p:{threshold:thr,target:tgt,weight:num('wt',35,120,65),glycogen:num('gly',800,3000,1600),
+    carbs:num('carb',0,100,40),temp:num('temp',-5,35,15),half:+$('half').value,ic:+$('ic').value/100,dmg:+$('dmg').value/100,split:+$('split').value/100,surge:+$('surge').value}};
+}
+
+/* ---------- SVG helpers ---------- */
+const NS='http://www.w3.org/2000/svg';
+function svg(w,h){const s=document.createElementNS(NS,'svg');s.setAttribute('viewBox',`0 0 ${w} ${h}`);s.setAttribute('role','img');return s;}
+function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;parent&&parent.appendChild(e);return e;}
+function niceStep(range,target){const raw=range/target, mag=Math.pow(10,Math.floor(Math.log10(raw)));const n=raw/mag;return (n<1.5?1:n<3?2:n<7?5:10)*mag;}
+
+function drawPace(r){
+  const W=720,H=280,m={l:52,r:16,t:12,b:30}, s=svg(W,H);
+  const vals=r.laps.flatMap(l=>[l.act,l.plan]);
+  let lo=Math.min(...vals), hi=Math.max(...vals);
+  const step=hi-lo>60?30:hi-lo>25?10:5;
+  lo=Math.floor((lo-3)/step)*step; hi=Math.ceil((hi+3)/step)*step;
+  const x=km=>m.l+km/L*(W-m.l-m.r), y=p=>m.t+(p-lo)/(hi-lo)*(H-m.t-m.b);
+  for(let p=lo;p<=hi;p+=step){el('line',{x1:m.l,x2:W-m.r,y1:y(p),y2:y(p),stroke:'var(--line)','stroke-width':1},s);el('text',{x:m.l-8,y:y(p)+4,'text-anchor':'end'},s,fmtPace(p));}
+  for(const km of [5,10,15,20,25,30,35,40]){el('text',{x:x(km),y:H-10,'text-anchor':'middle'},s,km+'km');}
+  el('line',{x1:x(L/2),x2:x(L/2),y1:m.t,y2:H-m.b,stroke:'var(--muted)','stroke-dasharray':'2 4','stroke-width':1},s);
+  if(r.wallKm!=null){
+    const wx=x(r.wallKm);
+    el('rect',{x:wx,y:m.t,width:Math.max(0,W-m.r-wx),height:H-m.t-m.b,fill:'var(--act)',opacity:.07},s);
+    el('text',{x:wx+6,y:m.t+14,fill:'var(--act)'},s,`失速 ${r.wallKm.toFixed(1)}km`);
+  }
+  const path=k=>r.laps.map((l,i)=>`${i?'L':'M'}${x(l.mid).toFixed(1)},${y(l[k]).toFixed(1)}`).join('');
+  el('path',{d:path('plan'),fill:'none',stroke:'var(--plan)','stroke-width':2,'stroke-dasharray':'5 4'},s);
+  el('path',{d:path('act'),fill:'none',stroke:'var(--act)','stroke-width':2.5,'stroke-linejoin':'round'},s);
+  const last=r.laps[r.laps.length-1];
+  el('circle',{cx:x(last.mid),cy:y(last.act),r:4,fill:'var(--act)'},s);
+  return s;
+}
+
+function drawFuel(r){
+  const W=520,H=240,m={l:40,r:44,t:12,b:30}, s=svg(W,H);
+  const x=d=>m.l+d/L*(W-m.l-m.r), yG=g=>m.t+(1-g)*(H-m.t-m.b);
+  const fMax=Math.max(0.1,Math.ceil(Math.max(r.endF,r.Mmax)*1.25*20)/20);
+  const yF=f=>m.t+(1-f/fMax)*(H-m.t-m.b);
+  for(let g=0;g<=1.0001;g+=0.25){el('line',{x1:m.l,x2:W-m.r,y1:yG(g),y2:yG(g),stroke:'var(--line)'},s);el('text',{x:m.l-6,y:yG(g)+4,'text-anchor':'end'},s,Math.round(g*100)+'%');
+    el('text',{x:W-m.r+6,y:yG(g)+4,fill:'var(--fat)'},s,Math.round(g*fMax*100)+'%');}
+  for(const km of [10,20,30,40]) el('text',{x:x(km),y:H-10,'text-anchor':'middle'},s,km+'km');
+  el('rect',{x:m.l,y:yG(0.12),width:W-m.l-m.r,height:yG(0)-yG(0.12),fill:'var(--act)',opacity:.08},s);
+  const pts=r.steps.filter((_,i)=>i%3===0||i===r.steps.length-1);
+  const area=`M${x(0)},${yG(0)}`+pts.map(p=>`L${x(p.d).toFixed(1)},${yG(p.G).toFixed(1)}`).join('')+`L${x(L)},${yG(0)}Z`;
+  el('path',{d:area,fill:'var(--gly)',opacity:.14},s);
+  el('path',{d:pts.map((p,i)=>`${i?'L':'M'}${x(p.d).toFixed(1)},${yG(p.G).toFixed(1)}`).join(''),fill:'none',stroke:'var(--gly)','stroke-width':2.5},s);
+  el('path',{d:pts.map((p,i)=>`${i?'L':'M'}${x(p.d).toFixed(1)},${yF(p.F).toFixed(1)}`).join(''),fill:'none',stroke:'var(--fat)','stroke-width':2},s);
+  if(r.Mmax>0.0005) el('path',{d:pts.map((p,i)=>`${i?'L':'M'}${x(p.d).toFixed(1)},${yF(p.M).toFixed(1)}`).join(''),fill:'none',stroke:'var(--rec)','stroke-width':2},s);
+  return s;
+}
+
+function drawSweep(base){
+  const W=520,H=240,m={l:58,r:16,t:16,b:30}, s=svg(W,H);
+  const pts=[], nr=[]; for(let k=-10;k<=12;k++){pts.push({k,t:simulate({...base,split:k/100}).t});nr.push({k,t:simulate({...base,split:k/100,half:0,dmg:0}).t});}
+  const all=pts.concat(nr).map(p=>p.t);
+  let lo=Math.min(...all), hi=Math.max(...all);
+  if(hi-lo<60){const mid=(hi+lo)/2;lo=mid-30;hi=mid+30;}
+  const st=niceStep(hi-lo,4); lo=Math.floor(lo/st)*st; hi=Math.ceil(hi/st)*st;
+  const x=k=>m.l+(k+10)/22*(W-m.l-m.r), y=t=>m.t+(t-lo)/(hi-lo)*(H-m.t-m.b);
+  for(let t=lo;t<=hi+0.1;t+=st){el('line',{x1:m.l,x2:W-m.r,y1:y(t),y2:y(t),stroke:'var(--line)'},s);el('text',{x:m.l-6,y:y(t)+4,'text-anchor':'end'},s,fmtTime(t));}
+  for(const k of [-10,-5,0,5,10]) el('text',{x:x(k),y:H-10,'text-anchor':'middle'},s,(k>0?'+':'')+k+'%');
+  el('line',{x1:x(0),x2:x(0),y1:m.t,y2:H-m.b,stroke:'var(--muted)','stroke-dasharray':'2 4'},s);
+  el('path',{d:nr.map((p,i)=>`${i?'L':'M'}${x(p.k).toFixed(1)},${y(p.t).toFixed(1)}`).join(''),fill:'none',stroke:'var(--plan)','stroke-width':2,'stroke-dasharray':'5 4'},s);
+  el('path',{d:pts.map((p,i)=>`${i?'L':'M'}${x(p.k).toFixed(1)},${y(p.t).toFixed(1)}`).join(''),fill:'none',stroke:'var(--act)','stroke-width':2.5},s);
+  const best=pts.reduce((a,b)=>b.t<a.t-0.5?b:a);
+  el('circle',{cx:x(best.k),cy:y(best.t),r:5,fill:'var(--gly)'},s);
+  el('text',{x:x(best.k),y:y(best.t)-10,'text-anchor':'middle',fill:'var(--gly)'},s,'最速');
+  const cur=Math.round(base.split*100), ct=simulate(base).t;
+  el('circle',{cx:x(cur),cy:y(ct),r:6,fill:'none',stroke:'var(--ink)','stroke-width':2},s);
+  return {svg:s,best};
+}
+
+function limitSearch(base){
+  // fastest target where even pacing finishes without a wall
+  let lo=base.threshold*L*0.95, hi=base.threshold*L*2.2;
+  for(let i=0;i<30;i++){const mid=(lo+hi)/2;const r=simulate({...base,target:mid,split:0,surge:0});
+    if(r.wallKm===null) hi=mid; else lo=mid;}
+  // fastest predicted finish overall (even pacing, any target)
+  let bestT=Infinity,bestTarget=hi;
+  for(let tg=hi*0.97;tg<=hi*1.01;tg+=10){const r=simulate({...base,target:tg,split:0,surge:0});if(r.t<bestT){bestT=r.t;bestTarget=tg;}}
+  return {safe:hi,bestT,bestTarget};
+}
+
+function render(){
+  const {err,p}=read();
+  $('splitOut').textContent=(p.split>0?'+':'')+Math.round(p.split*100)+'%';
+  $('halfOut').textContent=p.half?`半減期 ${p.half}分`:'回復なし';
+  $('icOut').textContent=Math.round(p.ic*100)+'%';
+  $('dmgOut').textContent=p.dmg?`${Math.round(p.dmg*100)}%/時`:'なし';
+  $('surgeOut').textContent=p.surge?`${p.surge}秒/km速く`:'なし';
+  document.querySelectorAll('#presets button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.s===Math.round(p.split*100)&&+b.dataset.u===p.surge)));
+  if(err.length){$('err').hidden=false;$('err').textContent=err.join(' ');return;}
+  $('err').hidden=true;
+
+  const r=simulate(p);
+  const diff=r.t-p.target;
+  $('rFinish').textContent=fmtTime(r.t);
+  $('rFinish').className='v '+(diff>20?'bad':'good');
+  $('rDiff').textContent=`目標 ${fmtTime(p.target)} に対し ${fmtDelta(diff)}`;
+  $('rWall').textContent=r.wallKm==null?'なし':r.wallKm.toFixed(1)+'km';
+  $('rWall').className='v '+(r.wallKm==null?'good':'bad');
+  const hd=r.half2-r.half1;
+  $('rHalf').textContent=fmtDelta(hd);
+  $('rHalfS').textContent=`前半 ${fmtTime(r.half1)} / 後半 ${fmtTime(r.half2)}`;
+  $('rGly').textContent=Math.round(r.endG*100)+'%';
+  $('rGly').className='v '+(r.endG>0.12?'good':'bad');
+  $('rFat').textContent=`筋損傷 ${(r.endF*100).toFixed(1)}% / 一時的な疲労 ${(r.endM*100).toFixed(1)}%`;
+
+  $('cPace').replaceChildren(drawPace(r));
+  $('cFuel').replaceChildren(drawFuel(r));
+  const sw=drawSweep(p); $('cSweep').replaceChildren(sw.svg);
+
+  const evenR=simulate({...p,split:0,surge:0});
+  const cmp=r.t-evenR.t;
+  let v;
+  if(r.wallKm==null) v=`この配分なら目標どおりに走り切れます。ゴール時に糖が${Math.round(r.endG*100)}%残っており、まだ余力があります。`;
+  else v=`${r.wallKm.toFixed(1)}km付近で${r.depleteKm!=null&&r.depleteKm-r.wallKm<6?'糖が尽きかけ':'出せる速度が計画を下回り'}、ペースが落ち始めます。`;
+  if(p.split!==0||p.surge!==0) v+=` 同じ条件でイーブンに走った場合は ${fmtTime(evenR.t)} で、この配分との差は ${fmtDelta(cmp)} です。`;
+  if(r.Macc>0.002){
+    const pct=Math.round(r.Mrec/r.Macc*100);
+    const nr=simulate({...p,half:0,dmg:0});
+    v+=` 速く走った区間でたまった一時的な疲労のうち${pct}%は、ペースが落ちた区間で回復しました。回復を考えない場合（${fmtTime(nr.t)}）より ${fmtDelta(nr.t-r.t).replace('+','')} 縮んでいますが、使った糖と筋損傷は戻りません。`;
+  }
+  v+=` 前後半差だけを変えた中では ${sw.best.k>0?'+':''}${sw.best.k}% が最速（${fmtTime(sw.best.t)}）でした。`;
+  $('verdict').textContent=v;
+
+  const lim=limitSearch(p);
+  $('limitText').textContent=`この体力・補給・気温なら、イーブンペースで失速せずに走り切れる最速の目標は約 ${fmtTime(lim.safe)}（${fmtPace(lim.safe/L)}/km）です。それより速い目標を立てると、配分をどう変えても終盤のどこかで失速します。`;
+}
+
+let raf=0;
+function schedule(){cancelAnimationFrame(raf);raf=requestAnimationFrame(render);}
+$('form').addEventListener('input',schedule);
+$('form').addEventListener('submit',e=>e.preventDefault());
+$('presets').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('split').value=b.dataset.s;$('surge').value=b.dataset.u;render();});
+render();
+})();
+</script>
+</body>
+</html>
