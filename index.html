@@ -31,15 +31,29 @@ header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-be
 h1{font-family:var(--f-display);font-weight:700;font-size:clamp(34px,6vw,52px);line-height:.95;margin:0;letter-spacing:.01em;text-wrap:balance}
 h1 span{color:var(--act)}
 header p{margin:0;color:var(--muted);max-width:52ch}
-.grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
+.grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:20px;align-items:start}
 @media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
 .rail{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:18px}
 fieldset{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
 legend{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;padding:0}
-.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
 .row label{font-size:13px}
 .row small{display:block;color:var(--muted);font-size:11px;line-height:1.35}
 input[type=text],input[type=number]{width:96px;font-family:var(--f-mono);font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);text-align:right}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.stepper{display:inline-flex;align-items:stretch;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--bg)}
+.stepper input[type=text],.stepper input[type=number]{border:0;border-radius:0;width:78px;text-align:center;background:transparent}
+.stepper input:focus-visible{outline:none}
+.stepper:focus-within{outline:2px solid var(--act);outline-offset:1px}
+.stepper button{min-width:38px;min-height:34px;padding:0 4px;border:0;background:var(--chip);color:var(--ink);font-family:var(--f-mono);font-size:11px;font-weight:600;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.stepper button:hover{color:var(--act)}
+.stepper button:active{background:var(--line)}
+.stepper button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--act)}
+.quick{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;grid-column:1/-1}
+.quick button{font-family:var(--f-mono);font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer}
+.quick button:hover{border-color:var(--act)}
+.quick button[aria-pressed="true"]{background:var(--act);color:#fff;border-color:var(--act)}
 input:focus-visible,button:focus-visible{outline:2px solid var(--act);outline-offset:2px}
 .slider{display:flex;flex-direction:column;gap:4px}
 .slider .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px}
@@ -89,15 +103,17 @@ details code{font-family:var(--f-mono);font-size:12px;background:var(--chip);pad
     <form class="rail" id="form" autocomplete="off">
       <fieldset>
         <legend>ランナー</legend>
-        <div class="row"><label for="thr">閾値ペース<small>約1時間維持できるペース（/km）</small></label><input type="text" id="thr" value="4:35" inputmode="numeric"></div>
-        <div class="row"><label for="wt">体重（kg）</label><input type="number" id="wt" value="65" min="35" max="120" step="1"></div>
-        <div class="row"><label for="gly">糖の貯蔵（kcal）<small>筋＋肝グリコーゲン。カーボローディングで増える</small></label><input type="number" id="gly" value="1600" min="800" max="3000" step="50"></div>
+        <div class="row"><label for="thr">閾値ペース<small>約1時間維持できるペース（/km）</small></label><span class="stepper"><input type="text" id="thr" value="4:35" inputmode="numeric"></span></div>
+        <div class="row"><label for="wt">体重（kg）</label><span class="stepper"><input type="number" id="wt" value="65" min="35" max="120" step="1"></span></div>
+        <div class="row"><label for="gly">糖の貯蔵（kcal）<small>筋＋肝グリコーゲン。カーボローディングで増える</small></label><span class="stepper"><input type="number" id="gly" value="1600" min="800" max="3000" step="50"></span></div>
       </fieldset>
       <fieldset>
         <legend>レース条件</legend>
-        <div class="row"><label for="tgt">目標タイム</label><input type="text" id="tgt" value="3:28:00" inputmode="numeric"></div>
-        <div class="row"><label for="carb">補給（g/時）<small>ジェル1本 ≈ 20〜25g</small></label><input type="number" id="carb" value="40" min="0" max="100" step="5"></div>
-        <div class="row"><label for="temp">気温（℃）</label><input type="number" id="temp" value="15" min="-5" max="35" step="1"></div>
+        <div class="row"><label for="tgt">目標タイム</label><span class="stepper"><input type="text" id="tgt" value="3:28:00" inputmode="numeric"></span>
+          <div class="quick" data-for="tgt"><button type="button" data-v="3:00:00">3:00</button><button type="button" data-v="3:15:00">3:15</button><button type="button" data-v="3:30:00">3:30</button><button type="button" data-v="3:45:00">3:45</button><button type="button" data-v="4:00:00">4:00</button></div></div>
+        <div class="row"><label for="carb">補給（g/時）<small>ジェル1本 ≈ 20〜25g</small></label><span class="stepper"><input type="number" id="carb" value="40" min="0" max="100" step="5"></span>
+          <div class="quick" data-for="carb"><button type="button" data-v="0">なし</button><button type="button" data-v="25">1本/時</button><button type="button" data-v="50">2本/時</button><button type="button" data-v="75">3本/時</button></div></div>
+        <div class="row"><label for="temp">気温（℃）</label><span class="stepper"><input type="number" id="temp" value="15" min="-5" max="35" step="1"></span></div>
         <div class="err" id="err" hidden></div>
       </fieldset>
       <fieldset>
@@ -345,6 +361,7 @@ function render(){
   $('dmgOut').textContent=p.dmg?`${Math.round(p.dmg*100)}%/時`:'なし';
   $('surgeOut').textContent=p.surge?`${p.surge}秒/km速く`:'なし';
   document.querySelectorAll('#presets button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.s===Math.round(p.split*100)&&+b.dataset.u===p.surge)));
+  syncQuick();
   if(err.length){$('err').hidden=false;$('err').textContent=err.join(' ');return;}
   $('err').hidden=true;
 
@@ -383,6 +400,44 @@ function render(){
   const lim=limitSearch(p);
   $('limitText').textContent=`この体力・補給・気温なら、イーブンペースで失速せずに走り切れる最速の目標は約 ${fmtTime(lim.safe)}（${fmtPace(lim.safe/L)}/km）です。それより速い目標を立てると、配分をどう変えても終盤のどこかで失速します。`;
 }
+
+/* ---------- 入力補助 ---------- */
+const STEP={
+  thr:{d:5,lo:150,hi:600,clock:true,fmt:fmtPace,u:'秒'},
+  tgt:{d:60,lo:7200,hi:28800,clock:true,fmt:fmtTime,u:'分',show:1},
+  wt:{d:1,u:''}, gly:{d:50,u:''}, carb:{d:5,u:''}, temp:{d:1,u:''}
+};
+const LABEL={thr:'閾値ペース',tgt:'目標タイム',wt:'体重',gly:'糖の貯蔵',carb:'補給',temp:'気温'};
+function bump(id,dir){
+  const inp=$(id), c=STEP[id];
+  if(c.clock){
+    let v=parseClock(inp.value); if(!isFinite(v)) v=id==='tgt'?12480:275;
+    v=Math.round(v/c.d)*c.d + dir*c.d;
+    inp.value=c.fmt(Math.min(c.hi,Math.max(c.lo,v)));
+  }else{
+    const lo=+inp.min, hi=+inp.max; let v=parseFloat(inp.value); if(!isFinite(v)) v=+inp.defaultValue;
+    v=Math.round(v/c.d)*c.d + dir*c.d;
+    inp.value=String(Math.min(hi,Math.max(lo,v)));
+  }
+  render();
+}
+for(const id in STEP){
+  const inp=$(id), c=STEP[id], wrap=inp.parentElement;
+  const txt=c.u?`${c.show||c.d}${c.u}`:String(c.d);
+  const mk=(dir,sign)=>{const b=document.createElement('button');b.type='button';b.textContent=sign+txt;
+    b.setAttribute('aria-label',`${LABEL[id]}を${sign==='+'?'増やす':'減らす'}（${txt}）`);
+    let t1=0,t2=0; const stop=()=>{clearTimeout(t1);clearInterval(t2);};
+    b.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();bump(id,dir);stop();t1=setTimeout(()=>{t2=setInterval(()=>bump(id,dir),70);},400);});
+    ['pointerup','pointerleave','pointercancel','blur'].forEach(ev=>b.addEventListener(ev,stop));
+    b.addEventListener('click',e=>{if(e.detail===0)bump(id,dir);});
+    return b;};
+  wrap.prepend(mk(-1,'−')); wrap.append(mk(1,'+'));
+  inp.addEventListener('keydown',e=>{if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();bump(id,e.key==='ArrowUp'?1:-1);}});
+  if(c.clock) inp.addEventListener('change',()=>{const v=parseClock(inp.value);if(isFinite(v)&&v>=c.lo&&v<=c.hi){inp.value=c.fmt(v);render();}});
+}
+document.querySelectorAll('.quick').forEach(q=>q.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$(q.dataset.for).value=b.dataset.v;render();}));
+function syncQuick(){document.querySelectorAll('.quick').forEach(q=>{const v=$(q.dataset.for).value;
+  q.querySelectorAll('button').forEach(b=>{const same=STEP[q.dataset.for].clock?parseClock(b.dataset.v)===parseClock(v):+b.dataset.v===+v;b.setAttribute('aria-pressed',String(same));});});}
 
 let raf=0;
 function schedule(){cancelAnimationFrame(raf);raf=requestAnimationFrame(render);}
