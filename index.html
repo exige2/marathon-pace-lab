@@ -87,6 +87,16 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:6px;p
 summary{cursor:pointer;font-weight:700}
 details p,details li{max-width:72ch;color:var(--ink)}
 details code{font-family:var(--f-mono);font-size:12px;background:var(--chip);padding:1px 5px;border-radius:3px}
+.helper{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 12px}
+.helper summary{font-size:13px;color:var(--act)}
+.hsec{display:flex;flex-direction:column;gap:10px;padding-top:12px}
+.hsec+.hsec{border-top:1px dashed var(--line);margin-top:12px}
+.hsec h3{font-size:13px;margin:0;font-weight:700}
+.hnote{margin:0;font-size:11px;color:var(--muted);line-height:1.45}
+.hres{font-size:12px;line-height:1.5;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+.hres b{font-family:var(--f-mono);font-size:13px}
+.use{align-self:flex-end;font-family:var(--f-body);font-size:12px;font-weight:700;padding:6px 14px;border-radius:4px;border:1px solid var(--act);background:var(--act);color:#fff;cursor:pointer}
+.use:disabled{opacity:.4;cursor:not-allowed}
 .err{color:var(--bad);font-size:11px}
 @media (prefers-reduced-motion:no-preference){.cell .v{transition:color .2s}}
 </style>
@@ -106,7 +116,29 @@ details code{font-family:var(--f-mono);font-size:12px;background:var(--chip);pad
         <div class="row"><label for="vo2">VO2max<small>ml/kg/分。Garminの表示値でOK。閾値ペースと連動します</small></label><span class="stepper"><input type="number" id="vo2" value="45" min="30" max="85" step="0.1"></span></div>
         <div class="row"><label for="thr">閾値ペース<small>約1時間維持できるペース（/km）。VO2maxと連動</small></label><span class="stepper"><input type="text" id="thr" value="4:35" inputmode="numeric"></span></div>
         <div class="row"><label for="wt">体重（kg）</label><span class="stepper"><input type="number" id="wt" value="65" min="35" max="120" step="1"></span></div>
-        <div class="row"><label for="gly">糖の貯蔵（kcal）<small>筋＋肝グリコーゲン。カーボローディングで増える</small></label><span class="stepper"><input type="number" id="gly" value="1600" min="800" max="3000" step="50"></span></div>
+        <div class="row"><label for="gly">糖の貯蔵（kcal）<small>走りで使える筋＋肝グリコーゲン。下の「推定する」で求められます</small></label><span class="stepper"><input type="number" id="gly" value="1600" min="800" max="3000" step="50"></span></div>
+        <details class="helper" id="glyHelp">
+          <summary>糖の貯蔵を推定する</summary>
+          <div class="hsec">
+            <h3>体組成と食事から</h3>
+            <div class="row"><label for="mus">骨格筋量（kg）<small>オムロンは 体重×骨格筋率。タニタの「筋肉量」は大きく出るので約0.55倍に</small></label><span class="stepper"><input type="number" id="mus" value="26" min="10" max="60" step="0.5"></span>
+              <div class="quick" data-for="mus" id="musQuick"><button type="button" data-v="" id="musFromWt">体重×40%</button></div></div>
+            <div class="row"><label for="cpk">直近2日の炭水化物<small>体重1kgあたりの1日量（g）</small></label><span class="stepper"><input type="number" id="cpk" value="5" min="2" max="12" step="0.5"></span>
+              <div class="quick" data-for="cpk"><button type="button" data-v="4">普段 4g</button><button type="button" data-v="6">多め 6g</button><button type="button" data-v="8">ローディング 8g</button></div></div>
+            <div class="hres" id="estA">–</div>
+            <button type="button" class="use" id="useA">この値を使う</button>
+          </div>
+          <div class="hsec">
+            <h3>過去のレースから逆算</h3>
+            <p class="hnote">いまのVO2max・体重・回復の設定のまま当時のレースを再現し、その地点で失速する糖の量を探します。</p>
+            <div class="row"><label for="pPace">当時のペース<small>失速するまでの平均（/km）</small></label><span class="stepper"><input type="text" id="pPace" value="4:55" inputmode="numeric"></span></div>
+            <div class="row"><label for="pWall">失速した地点（km）</label><span class="stepper"><input type="number" id="pWall" value="32" min="10" max="42" step="0.5"></span></div>
+            <div class="row"><label for="pTemp">当時の気温（℃）</label><span class="stepper"><input type="number" id="pTemp" value="15" min="-5" max="35" step="1"></span></div>
+            <div class="row"><label for="pCarb">当時の補給（g/時）</label><span class="stepper"><input type="number" id="pCarb" value="25" min="0" max="100" step="5"></span></div>
+            <div class="hres" id="estB">–</div>
+            <button type="button" class="use" id="useB">この値を使う</button>
+          </div>
+        </details>
       </fieldset>
       <fieldset>
         <legend>レース条件</legend>
@@ -372,6 +404,7 @@ function render(){
   $('surgeOut').textContent=p.surge?`${p.surge}秒/km速く`:'なし';
   document.querySelectorAll('#presets button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.s===Math.round(p.split*100)&&+b.dataset.u===p.surge)));
   syncQuick();
+  helpers();
   if(err.length){$('err').hidden=false;$('err').textContent=err.join(' ');return;}
   $('err').hidden=true;
 
@@ -417,9 +450,10 @@ function render(){
 const STEP={
   thr:{d:5,lo:150,hi:600,clock:true,fmt:fmtPace,u:'秒'},
   tgt:{d:60,lo:7200,hi:28800,clock:true,fmt:fmtTime,u:'分',show:1},
-  vo2:{d:1,u:''}, wt:{d:1,u:''}, gly:{d:50,u:''}, carb:{d:5,u:''}, temp:{d:1,u:''}
+  vo2:{d:1,u:''}, wt:{d:1,u:''}, gly:{d:50,u:''}, mus:{d:0.5,u:''}, cpk:{d:0.5,u:''},
+  pPace:{d:5,lo:150,hi:600,clock:true,fmt:fmtPace,u:'秒'}, pWall:{d:0.5,u:''}, pTemp:{d:1,u:''}, pCarb:{d:5,u:''}, carb:{d:5,u:''}, temp:{d:1,u:''}
 };
-const LABEL={vo2:'VO2max',thr:'閾値ペース',tgt:'目標タイム',wt:'体重',gly:'糖の貯蔵',carb:'補給',temp:'気温'};
+const LABEL={vo2:'VO2max',mus:'骨格筋量',cpk:'炭水化物',pPace:'当時のペース',pWall:'失速した地点',pTemp:'当時の気温',pCarb:'当時の補給',thr:'閾値ペース',tgt:'目標タイム',wt:'体重',gly:'糖の貯蔵',carb:'補給',temp:'気温'};
 function bump(id,dir){
   const inp=$(id), c=STEP[id];
   if(c.clock){
@@ -458,6 +492,50 @@ for(const id in STEP){
 document.querySelectorAll('.quick').forEach(q=>q.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$(q.dataset.for).value=b.dataset.v;render();}));
 function syncQuick(){document.querySelectorAll('.quick').forEach(q=>{const v=$(q.dataset.for).value;
   q.querySelectorAll('button').forEach(b=>{const same=STEP[q.dataset.for].clock?parseClock(b.dataset.v)===parseClock(v):+b.dataset.v===+v;b.setAttribute('aria-pressed',String(same));});});}
+
+/* ---------- 糖の貯蔵の推定 ---------- */
+function interp(x,pts){if(x<=pts[0][0])return pts[0][1];for(let i=1;i<pts.length;i++){if(x<=pts[i][0]){const [a,b]=pts[i-1],[c,d]=pts[i];return b+(d-b)*(x-a)/(c-a);}}return pts[pts.length-1][1];}
+function glyFromBody(mus,cpk){
+  const gpk=interp(cpk,[[3,12],[5,15],[7,20],[10,24]]);
+  const liver=Math.min(110,Math.max(60,55+7*cpk));
+  const muscleG=mus*gpk;
+  return {gpk,liver,totalG:muscleG+liver,usable:(muscleG*0.7+liver)*4};
+}
+function backsolve(base,wall){
+  const w=G=>{const r=simulate({...base,glycogen:G});return r.wallKm==null?99:r.wallKm;};
+  if(w(4000)<wall-0.5) return {kind:'fatigue',at:w(4000)};
+  if(w(400)>=wall) return {kind:'easy'};
+  let lo=400,hi=4000;
+  for(let i=0;i<28;i++){const m=(lo+hi)/2;(w(m)<wall)?lo=m:hi=m;}
+  return {kind:'ok',G:hi};
+}
+const nf=n=>Math.round(n).toLocaleString('ja-JP');
+let estA=null, estB=null;
+function helpers(){
+  const {err,p}=read();
+  const mus=parseFloat($('mus').value), cpk=parseFloat($('cpk').value);
+  $('musFromWt').dataset.v=String(Math.round(p.weight*0.4*2)/2);
+  if(mus>0&&cpk>0){
+    const e=glyFromBody(mus,cpk); estA=e.usable;
+    $('estA').innerHTML=`筋肉 ${mus}kg × ${e.gpk.toFixed(1)}g ＋ 肝臓 ${Math.round(e.liver)}g ＝ 貯蔵の合計 約${nf(e.totalG)}g（${nf(e.totalG*4)}kcal）。<br>走りで使える分（筋肉の7割＋肝臓）は <b>約${nf(estA)}kcal</b>`;
+  }else{estA=null;$('estA').textContent='骨格筋量と炭水化物の量を入力してください。';}
+  $('useA').disabled=estA==null;
+  const pace=parseClock($('pPace').value), wall=parseFloat($('pWall').value);
+  estB=null;
+  if(err.length||!(pace>=150&&pace<=600)||!(wall>=10&&wall<=42)){$('estB').textContent='当時のペースと失速した地点を入力してください。';}
+  else{
+    const base={...p,target:pace*L,split:0,surge:0,temp:+$('pTemp').value||15,carbs:+$('pCarb').value||0};
+    const r=backsolve(base,wall);
+    if(r.kind==='fatigue'&&r.at<2) $('estB').textContent=`${fmtPace(pace)}/kmはいまの閾値ペース（${fmtPace(p.threshold)}/km）より速く、この設定では最初から維持できません。VO2maxか閾値ペースを見直してください。`;
+    else if(r.kind==='fatigue') $('estB').textContent=`いまの設定では、糖がいくらあっても${r.at.toFixed(1)}km付近で脚の疲労により失速します。VO2maxか閾値ペースが実際より低めになっている可能性があります。`;
+    else if(r.kind==='easy') $('estB').textContent='いまの設定では、このペースなら糖がかなり少なくても失速しません。VO2maxか閾値ペースが実際より高めになっている可能性があります。';
+    else{estB=r.G;$('estB').innerHTML=`${fmtPace(pace)}/kmで${wall}km地点で失速したなら、使えた糖は <b>約${nf(estB)}kcal</b>。当時ローディングをしていなかったなら、今回ローディングすれば2〜3割増える見込みです。`;}
+  }
+  $('useB').disabled=estB==null;
+}
+function useGly(v){$('gly').value=String(Math.min(3000,Math.max(800,Math.round(v/50)*50)));render();}
+$('useA').addEventListener('click',()=>estA&&useGly(estA));
+$('useB').addEventListener('click',()=>estB&&useGly(estB));
 
 let raf=0;
 function schedule(){cancelAnimationFrame(raf);raf=requestAnimationFrame(render);}
