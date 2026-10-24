@@ -103,7 +103,8 @@ details code{font-family:var(--f-mono);font-size:12px;background:var(--chip);pad
     <form class="rail" id="form" autocomplete="off">
       <fieldset>
         <legend>ランナー</legend>
-        <div class="row"><label for="thr">閾値ペース<small>約1時間維持できるペース（/km）</small></label><span class="stepper"><input type="text" id="thr" value="4:35" inputmode="numeric"></span></div>
+        <div class="row"><label for="vo2">VO2max<small>ml/kg/分。Garminの表示値でOK。閾値ペースと連動します</small></label><span class="stepper"><input type="number" id="vo2" value="45" min="30" max="85" step="0.1"></span></div>
+        <div class="row"><label for="thr">閾値ペース<small>約1時間維持できるペース（/km）。VO2maxと連動</small></label><span class="stepper"><input type="text" id="thr" value="4:35" inputmode="numeric"></span></div>
         <div class="row"><label for="wt">体重（kg）</label><span class="stepper"><input type="number" id="wt" value="65" min="35" max="120" step="1"></span></div>
         <div class="row"><label for="gly">糖の貯蔵（kcal）<small>筋＋肝グリコーゲン。カーボローディングで増える</small></label><span class="stepper"><input type="number" id="gly" value="1600" min="800" max="3000" step="50"></span></div>
       </fieldset>
@@ -189,12 +190,14 @@ details code{font-family:var(--f-mono);font-size:12px;background:var(--chip);pad
       <div class="card" id="limitCard">
         <h2>このモデルでの限界</h2>
         <p class="sub" id="limitText">–</p>
+        <p class="sub" id="vo2Text">–</p>
       </div>
 
       <details>
         <summary>モデルの仕組み</summary>
         <p>42.195kmを100m刻みで計算します。各区間で次の3つを更新します。</p>
         <ul>
+          <li><b>VO2max</b>：ダニエルズの式で閾値ペースに換算します。走速度 v（m/分）の酸素コストを <code>−4.60 + 0.182258v + 0.000104v²</code>、60分間維持できる割合を約89%とし、その速度を閾値ペースとします。予想マラソンタイムも同じ式から求めます。Garminの表示値は実測より高めに出ることがあります。</li>
           <li><b>エネルギー消費</b>：1kmあたり <code>体重 × 1.0 kcal</code>。速度にはほぼ依存しませんが、疲労と暑さで少し増えます。</li>
           <li><b>糖の割合</b>：強度 <code>I = 速度 ÷ 閾値速度</code> に対して <code>0.25 + 0.75 × ((I−0.5)/0.5)^4</code>。強度が上がると急に糖を使うようになる、下に凸の関数です。補給は時間あたりで糖に加算します。</li>
           <li><b>筋損傷（回復しにくい疲労）</b>：<code>I</code> が0.72を超えた分の4乗で蓄積します。「筋損傷の回復」を上げると、1時間あたりその割合だけ戻ります。</li>
@@ -224,6 +227,13 @@ function fmtTime(sec){
 }
 function fmtPace(sec){ sec=Math.round(sec); return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`; }
 function fmtDelta(sec){ const sgn=sec<0?'−':'+'; sec=Math.abs(Math.round(sec)); const m=Math.floor(sec/60), s=sec%60; return `${sgn}${m}:${String(s).padStart(2,'0')}`; }
+
+/* ダニエルズ（VDOT）の式 */
+const vo2Cost=v=>-4.60+0.182258*v+0.000104*v*v;            // v: m/分 → ml/kg/分
+const pctMax=tm=>0.8+0.1894393*Math.exp(-0.012778*tm)+0.2989558*Math.exp(-0.1932605*tm); // tm: 分
+function thrFromVo2(V){const c=-(V*pctMax(60)+4.60);const v=(-0.182258+Math.sqrt(0.182258**2-4*0.000104*c))/(2*0.000104);return 60000/v;}
+function vo2FromThr(pace){return vo2Cost(60000/pace)/pctMax(60);}
+function danielsMarathon(V){let lo=90,hi=600;for(let i=0;i<50;i++){const m=(lo+hi)/2;(vo2Cost(42195/m)/pctMax(m)>V)?lo=m:hi=m;}return hi*60;}
 
 function simulate(p){
   const avg=p.target/L, cs=1/p.threshold, G0=p.glycogen;
@@ -398,6 +408,8 @@ function render(){
   $('verdict').textContent=v;
 
   const lim=limitSearch(p);
+  const vIn=parseFloat($('vo2').value), V=(vIn>=30&&vIn<=85)?vIn:vo2FromThr(p.threshold), dm=danielsMarathon(V), need=vo2Cost(42195/(p.target/60))/V, can=pctMax(p.target/60);
+  $('vo2Text').textContent=`VO2max ${V.toFixed(1)} の場合、ダニエルズの式による予想マラソンタイムは ${fmtTime(dm)} です。目標ペースで走るにはVO2maxの${Math.round(need*100)}%が必要で、この所要時間で維持できる目安の${Math.round(can*100)}%${need>can+0.005?'を上回っています':'の範囲に収まっています'}。`;
   $('limitText').textContent=`この体力・補給・気温なら、イーブンペースで失速せずに走り切れる最速の目標は約 ${fmtTime(lim.safe)}（${fmtPace(lim.safe/L)}/km）です。それより速い目標を立てると、配分をどう変えても終盤のどこかで失速します。`;
 }
 
@@ -405,9 +417,9 @@ function render(){
 const STEP={
   thr:{d:5,lo:150,hi:600,clock:true,fmt:fmtPace,u:'秒'},
   tgt:{d:60,lo:7200,hi:28800,clock:true,fmt:fmtTime,u:'分',show:1},
-  wt:{d:1,u:''}, gly:{d:50,u:''}, carb:{d:5,u:''}, temp:{d:1,u:''}
+  vo2:{d:1,u:''}, wt:{d:1,u:''}, gly:{d:50,u:''}, carb:{d:5,u:''}, temp:{d:1,u:''}
 };
-const LABEL={thr:'閾値ペース',tgt:'目標タイム',wt:'体重',gly:'糖の貯蔵',carb:'補給',temp:'気温'};
+const LABEL={vo2:'VO2max',thr:'閾値ペース',tgt:'目標タイム',wt:'体重',gly:'糖の貯蔵',carb:'補給',temp:'気温'};
 function bump(id,dir){
   const inp=$(id), c=STEP[id];
   if(c.clock){
@@ -419,8 +431,16 @@ function bump(id,dir){
     v=Math.round(v/c.d)*c.d + dir*c.d;
     inp.value=String(Math.min(hi,Math.max(lo,v)));
   }
+  link(id);
   render();
 }
+function link(id){
+  if(id==='vo2'){const V=parseFloat($('vo2').value);if(V>=30&&V<=85)$('thr').value=fmtPace(thrFromVo2(V));}
+  if(id==='thr'){const t=parseClock($('thr').value);if(t>=150&&t<=600)$('vo2').value=vo2FromThr(t).toFixed(1);}
+}
+$('vo2').addEventListener('input',()=>link('vo2'));
+$('thr').addEventListener('input',()=>link('thr'));
+link('thr');
 for(const id in STEP){
   const inp=$(id), c=STEP[id], wrap=inp.parentElement;
   const txt=c.u?`${c.show||c.d}${c.u}`:String(c.d);
